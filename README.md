@@ -2,7 +2,7 @@
 
 ## Tải Demo Chơi Thử
 
-👉 **[Tải BattleShip-Client v1.0.0 (.ZIP)](https://github.com/<tên_tài_khoản_của_bạn>/battle-ship-game/releases/latest)**
+👉 **[Tải BattleShip-Client v1.0.0 (.ZIP)](https://github.com/Minhhieu3012/battle-ship-game/releases/latest)**
 
 > _Không cần cài đặt Python! Chỉ cần tải về, giải nén và chạy file `BattleShip-Client.exe`._
 
