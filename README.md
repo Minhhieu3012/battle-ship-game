@@ -1,5 +1,11 @@
 # ⚓️🛥️ BattleShip — Multiplayer (2-player) over TCP
 
+## Tải Demo Chơi Thử
+
+👉 **[Tải BattleShip-Client v1.0.0 (.ZIP)](https://github.com/<tên_tài_khoản_của_bạn>/battle-ship-game/releases/latest)**
+
+> _Không cần cài đặt Python! Chỉ cần tải về, giải nén và chạy file `BattleShip-Client.exe`._
+
 ## Mô tả ngắn:
 
 BattleShip là game chiến thuật 2 người chơi, mỗi phòng tối đa 2 người, chạy online qua TCP. Server quản lý nhiều phòng độc lập và lưu trạng thái bàn cùng lượt chơi. Dữ liệu trao đổi dùng JSON line (kết thúc \n) để dễ parse và mở rộng. Trò chơi gồm chế độ cổ điển (đặt tàu, bắn theo lượt, hit/miss/sunk, xử lý disconnect).
