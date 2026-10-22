@@ -1,6 +1,6 @@
 import pygame
 from common import Button, load_asset_image
-from state import get_state
+from stat import get_state
 
 class BattleScreen:
     def __init__(self, screen, send_queue, username, my_ships):

@@ -2,12 +2,6 @@ battle-ship-game
 ├── README.md
 ├── client-network
 │   ├── __init__.py
-│   ├── __pycache__
-│   │   ├── network.cpython-312.pyc
-│   │   ├── network.cpython-313.pyc
-│   │   ├── network_client.cpython-312.pyc
-│   │   ├── state.cpython-312.pyc
-│   │   └── state.cpython-313.pyc
 │   ├── network.py
 │   └── state.py
 ├── client-ui
@@ -25,14 +19,8 @@ battle-ship-game
 │   ├── screen_lobby.py
 │   ├── screen_login.py
 │   └── screen_setup.py
+├── requirements.txt
 ├── server
-│   ├── __pycache__
-│   │   ├── game_logic.cpython-312.pyc
-│   │   ├── game_logic.cpython-313.pyc
-│   │   ├── handlers.cpython-312.pyc
-│   │   ├── handlers.cpython-313.pyc
-│   │   ├── utils.cpython-312.pyc
-│   │   └── utils.cpython-313.pyc
 │   ├── game_logic.py
 │   ├── handlers.py
 │   ├── server.py

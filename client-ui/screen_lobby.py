@@ -1,6 +1,6 @@
 import pygame
 from common import Button
-from state import get_state
+from stat import get_state
 
 class LobbyScreen:
     def __init__(self, screen, send_queue, username):

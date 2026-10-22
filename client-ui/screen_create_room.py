@@ -1,7 +1,7 @@
 import pygame
 from common import Button
 import random
-from state import get_state
+from stat import get_state
 
 class CreateRoomScreen:
     def __init__(self, screen, send_queue, username):
