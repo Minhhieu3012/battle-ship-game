@@ -1,8 +1,15 @@
+import sys
 import pygame
 from pathlib import Path
 
 # ====== Asset utils (đường dẫn ảnh) ======
-_ASSETS_DIR = Path(__file__).resolve().parent / "images"
+if getattr(sys, "frozen", False):
+    base_dir = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    _ASSETS_DIR = base_dir / "images"
+    if not _ASSETS_DIR.exists():
+        _ASSETS_DIR = Path(sys.executable).parent / "images"
+else:
+    _ASSETS_DIR = Path(__file__).resolve().parent / "images"
 
 def asset_path(filename: str) -> Path:
     # Trả về path tuyệt đối tới ảnh trong thư mục client-ui/images

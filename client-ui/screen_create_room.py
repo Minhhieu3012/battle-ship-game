@@ -1,7 +1,7 @@
 import pygame
 from common import Button
 import random
-from stat import get_state
+from state import get_state
 
 class CreateRoomScreen:
     def __init__(self, screen, send_queue, username):
@@ -28,6 +28,7 @@ class CreateRoomScreen:
             self.next = "setup"
             
         if self.back_button.handle_event(event):
+            get_state().reset_game_state()
             self.done = True
             self.next = "lobby"
 

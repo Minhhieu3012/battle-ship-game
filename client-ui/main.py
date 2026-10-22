@@ -5,15 +5,16 @@ from pathlib import Path
 import pygame
 from queue import Queue
 
-# ----- Thêm đường dẫn tới thư mục 'client-network' (có dấu '-') -----
-BASE = Path(__file__).resolve().parent.parent    # Lên thư mục cha (Group17-BattleShip)
-NET_DIR = BASE / "client-network"                # .../Group17-BattleShip/client-network
+# ----- Thêm đường dẫn tới thư mục 'client-network' (nếu chạy mã nguồn Python) -----
+if not getattr(sys, "frozen", False):
+    BASE = Path(__file__).resolve().parent.parent    # Lên thư mục cha (Group17-BattleShip)
+    NET_DIR = BASE / "client-network"                # .../Group17-BattleShip/client-network
 
-if NET_DIR.exists():
-    sys.path.append(str(NET_DIR))
-else:
-    print("[FATAL] Không tìm thấy thư mục 'client-network' cạnh 'client-ui'.")
-    raise SystemExit(1)
+    if NET_DIR.exists():
+        sys.path.append(str(NET_DIR))
+    else:
+        print("[FATAL] Không tìm thấy thư mục 'client-network' cạnh 'client-ui'.")
+        raise SystemExit(1)
 
 # Import module mạng chuẩn (network.py)
 from network import start_network, get_state_proxy

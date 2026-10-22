@@ -1,6 +1,6 @@
 import pygame
 from common import Button
-from stat import get_state
+from state import get_state
 
 class LobbyScreen:
     def __init__(self, screen, send_queue, username):
@@ -36,7 +36,7 @@ class LobbyScreen:
     def update(self):
         # Check if we've joined a room automatically
         game_state = get_state()
-        if game_state.get_joined():
+        if game_state.get_joined() and game_state.get_game_phase() == "setup":
             self.done = True
             self.next = "setup"
 

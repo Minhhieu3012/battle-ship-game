@@ -1,6 +1,6 @@
 import pygame
 from common import Button, InputBox
-from stat import get_state
+from state import get_state
 
 class JoinRoomScreen:
     def __init__(self, screen, send_queue, username):
