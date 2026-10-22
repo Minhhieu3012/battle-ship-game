@@ -6,8 +6,8 @@ class BattleScreen:
     def __init__(self, screen, send_queue, username, my_ships):
         self.screen = screen
         self.send_queue = send_queue
-        self.username = username
-        self.my_ships = my_ships
+        self.username = username or get_state().get_name() or ""
+        self.my_ships = my_ships or []
         self.font = pygame.font.SysFont("Arial", 28)
         self.small_font = pygame.font.SysFont("Arial", 20)
         self.big_font = pygame.font.SysFont("Arial", 48, bold=True)
@@ -19,8 +19,9 @@ class BattleScreen:
         self.enemy_origin = (450, 120)
         
         # Track shots
-        self.my_shots = {}      # (x,y) -> 'miss' | 'hit' | 'sunk' (tôi bắn)
-        self.enemy_shots = {}   # (x,y) -> 'miss' | 'hit' | 'sunk' (địch bắn)
+        self.my_shots = {}          # (x,y) -> 'miss' | 'hit' | 'sunk' (tôi bắn)
+        self.enemy_shots = {}       # (x,y) -> 'miss' | 'hit' | 'sunk' (địch bắn)
+        self.pending_shots = set()  # Toạ độ đang chờ server phản hồi để tránh click đúp
 
         # Danh sách tàu đã bị chìm để vẽ X lớn
         self.enemy_sunk_ships = []  # list[frozenset[(x,y)]]
@@ -30,6 +31,7 @@ class BattleScreen:
         self.next = None
         self.winner = None
         self.turn_info = ""
+        self.error_message = ""
 
         # Buttons for game over
         self.play_again_btn = pygame.Rect(220, 380, 160, 50)
@@ -48,6 +50,7 @@ class BattleScreen:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mx, my = event.pos
                 if self.play_again_btn.collidepoint(mx, my):
+                    get_state().reset_game_state()
                     self.done = True
                     self.next = "lobby"
                 elif self.exit_btn.collidepoint(mx, my):
@@ -62,7 +65,11 @@ class BattleScreen:
             
             if 0 <= col < self.grid_size and 0 <= row < self.grid_size:
                 game_state = get_state()
-                if game_state.is_my_turn(self.username) and (col, row) not in self.my_shots:
+                if not self.username:
+                    self.username = game_state.get_name() or ""
+
+                if game_state.is_my_turn(self.username) and (col, row) not in self.my_shots and (col, row) not in self.pending_shots:
+                    self.pending_shots.add((col, row))
                     self.send_queue.put({
                         "action": "shoot",
                         "x": col,
@@ -71,12 +78,22 @@ class BattleScreen:
 
     def update(self):
         game_state = get_state()
+        if not self.username:
+            self.username = game_state.get_name() or ""
         
+        # Check last error
+        err = game_state.get_last_error()
+        if err:
+            self.error_message = err
+
         # Update shot results
         shot_results = game_state.get_shot_results()
         for shot in shot_results:
             x, y, result, by = shot["x"], shot["y"], shot["result"], shot["by"]
-            if by == self.username:
+            self.pending_shots.discard((x, y))
+
+            is_my_shot = (by == self.username) or (bool(self.username) and by.strip().lower() == self.username.strip().lower())
+            if is_my_shot:
                 self.my_shots[(x, y)] = result
                 if result == 'sunk':
                     cells = self._extract_sunk_cells(shot, enemy_board=True)
@@ -91,20 +108,23 @@ class BattleScreen:
             game_state.clear_shot_results()
         
         # Update turn info
-        players = game_state.get_players()
-        current_turn = game_state.get_turn()
-        if players and current_turn is not None and len(players) > current_turn:
-            turn_player = players[current_turn]
-            self.turn_info = "Your turn" if turn_player == self.username else f"{turn_player}'s Turn"
+        if game_state.get_opponent_left():
+            self.turn_info = "Opponent disconnected"
+        else:
+            players = game_state.get_players()
+            current_turn = game_state.get_turn()
+            if players and current_turn is not None and len(players) > current_turn:
+                turn_player = players[current_turn]
+                is_turn = (turn_player == self.username) or (bool(self.username) and turn_player.strip().lower() == self.username.strip().lower())
+                self.turn_info = "Your turn" if is_turn else f"{turn_player}'s Turn"
         
         # Check for game over
         winner = game_state.get_winner()
         if winner and not self.winner:
-            self.winner = "me" if winner == self.username else "enemy"
+            self.set_winner(winner)
 
     # ====== Helpers sunk detection & drawing ======
     def _add_sunk_ship(self, store_list, cells):
-        # Thêm set cell nếu chưa có (tránh trùng)
         if not cells:
             return
         new_set = frozenset(cells)
@@ -116,10 +136,27 @@ class BattleScreen:
     def _extract_sunk_cells(self, shot, enemy_board: bool):
         """
         Lấy danh sách toạ độ thuộc con tàu bị chìm.
-        Ưu tiên dùng dữ liệu server nếu có; nếu không có thì suy luận
-        từ các ô 'hit' & 'sunk' liên tiếp.
-        enemy_board=True: tàu của đối thủ (tôi bắn chìm).
+        - Với tàu của tôi (enemy_board=False): Lấy chính xác từ self.my_ships đã đặt.
+        - Với tàu của đối thủ (enemy_board=True): Dùng dữ liệu server hoặc suy luận từ shots_map.
         """
+        sx, sy = shot["x"], shot["y"]
+
+        # Nếu là tàu của mình bị chìm, đối chiếu trực tiếp từ danh sách self.my_ships
+        if not enemy_board and self.my_ships:
+            for ship in self.my_ships:
+                pos = ship.get("pos") or ship.get("grid_pos")
+                if not pos:
+                    continue
+                r, c = pos
+                length = ship.get("length", 1)
+                orient = ship.get("orientation", "H")
+                if orient == "H":
+                    cells = [(c + i, r) for i in range(length)]
+                else:
+                    cells = [(c, r + i) for i in range(length)]
+                if (sx, sy) in cells:
+                    return cells
+
         # 1) Server có thể gửi trực tiếp danh sách cell
         ship_cells = shot.get("ship_cells")
         if ship_cells:
@@ -130,26 +167,32 @@ class BattleScreen:
         if ship and "length" in ship:
             length = ship["length"]
             orientation = ship.get("orientation", "H")
-            start = ship.get("pos") or ship.get("start") or (shot["x"], shot["y"])
-            sx, sy = start if isinstance(start, (list, tuple)) else (shot["x"], shot["y"])
+            start = ship.get("pos") or ship.get("start") or (sx, sy)
+            start_x, start_y = start if isinstance(start, (list, tuple)) else (sx, sy)
             if orientation == "H":
-                return [(sx + i, sy) for i in range(length)]
+                return [(start_x + i, start_y) for i in range(length)]
             else:
-                return [(sx, sy + i) for i in range(length)]
+                return [(start_x, start_y + i) for i in range(length)]
 
-        # 3) Suy luận từ lịch sử bắn
-        base = (shot["x"], shot["y"])
+        # 3) Suy luận từ lịch sử bắn (loại trừ các ô đã thuộc tàu chìm trước đó)
+        base = (sx, sy)
         shots_map = self.my_shots if enemy_board else self.enemy_shots
-        return self._infer_contiguous_ship(base, shots_map)
+        already_sunk = set()
+        store_list = self.enemy_sunk_ships if enemy_board else self.my_sunk_ships
+        for s in store_list:
+            already_sunk.update(s)
+        return self._infer_contiguous_ship(base, shots_map, already_sunk)
 
-    def _infer_contiguous_ship(self, start, shots_map):
+    def _infer_contiguous_ship(self, start, shots_map, already_sunk=None):
         """Suy luận con tàu bằng các ô 'hit'/'sunk' liên tiếp ngang hoặc dọc."""
+        if already_sunk is None:
+            already_sunk = set()
         x, y = start
 
         def collect_direction(dx, dy):
             cells = []
             cx, cy = x + dx, y + dy
-            while (cx, cy) in shots_map and shots_map[(cx, cy)] in ("hit", "sunk"):
+            while (cx, cy) in shots_map and shots_map[(cx, cy)] in ("hit", "sunk") and (cx, cy) not in already_sunk:
                 cells.append((cx, cy))
                 cx += dx
                 cy += dy
@@ -170,7 +213,7 @@ class BattleScreen:
             return horiz
         if len(vert) > 1:
             return vert
-        # Fallback (hiếm): chỉ có 1 ô
+        # Fallback: chỉ có 1 ô
         return [(x, y)]
 
     def draw(self):
@@ -215,21 +258,29 @@ class BattleScreen:
                 )
                 pygame.draw.rect(self.screen, (0, 150, 255), rect, 1)
         
-        # Vẽ tàu (sử dụng pos từ màn setup, orientation=H)
+        # Vẽ tàu (sử dụng pos từ màn setup)
         for ship in self.my_ships:
-            row, col = ship["pos"]
-            length = ship["length"]
+            pos = ship.get("pos") or ship.get("grid_pos")
+            if not pos:
+                continue
+            row, col = pos
+            length = ship.get("length", 1)
+            orientation = ship.get("orientation", "H")
+
             img = self.ship_images.get(length)
             if img is None:
-                # fallback hình chữ nhật KHÔNG viền
-                img = pygame.Surface((length * self.cell_size, self.cell_size))
+                w = length * self.cell_size if orientation == "H" else self.cell_size
+                h = self.cell_size if orientation == "H" else length * self.cell_size
+                img = pygame.Surface((w, h))
                 img.fill((100, 200, 100))
+            elif orientation == "V":
+                img = pygame.transform.rotate(img, -90)
 
-            pos = (
+            pixel_pos = (
                 self.my_origin[0] + col * self.cell_size,
                 self.my_origin[1] + row * self.cell_size
             )
-            self.screen.blit(img, pos)
+            self.screen.blit(img, pixel_pos)
         
         # Đánh dấu cú bắn của đối thủ lên bảng của tôi
         for (col, row), result in self.enemy_shots.items():
@@ -241,8 +292,8 @@ class BattleScreen:
             )
             if result in ['hit', 'sunk']:
                 pygame.draw.rect(self.screen, (255, 0, 0), rect, 0)
-            else:
-                pygame.draw.rect(self.screen, (100, 100, 100), rect, 0)
+            elif result == 'miss':
+                pygame.draw.circle(self.screen, (100, 100, 100), rect.center, 6)
 
         # Vẽ dấu X lớn cho tàu của tôi đã bị chìm
         for cells in self.my_sunk_ships:
@@ -279,8 +330,11 @@ class BattleScreen:
 
     def _draw_big_x_over_cells(self, cells_set, origin):
         """Vẽ dấu X lớn phủ toàn bộ vùng bao các ô của 1 con tàu."""
-        # cells_set là frozenset[(x,y)] hoặc list[(x,y)]
+        if not cells_set:
+            return
         cells = list(cells_set)
+        if not cells:
+            return
         min_c = min(c for c, _ in cells)
         max_c = max(c for c, _ in cells)
         min_r = min(r for _, r in cells)
@@ -320,4 +374,9 @@ class BattleScreen:
         self.screen.blit(exit_text, exit_rect)
 
     def set_winner(self, winner: str):
-        self.winner = winner
+        if winner in ("me", "enemy"):
+            self.winner = winner
+        elif bool(self.username) and winner == self.username:
+            self.winner = "me"
+        else:
+            self.winner = "enemy"

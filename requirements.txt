@@ -1,0 +1,2 @@
+# BattleShip Multiplayer Dependencies
+pygame>=2.6.0
